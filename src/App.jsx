@@ -1,26 +1,128 @@
-import { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import AudioControls from "./components/AudioControls";
 import { chillHop } from "./data";
+import "./components/styles.css";
 
 function App() {
-  const [music, setMusic] = useState(chillHop()[0]);
+  const [trackIndex, setTrackIndex] = useState(0);
+  const [trackProgress, setTrackProgress] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const { name, arUst, color, cover, audio, id, acUve } =
+    chillHop()[trackIndex];
 
-  const handleMusic = (music) => {
-    setMusic(music);
+  const audioRef = useRef(new Audio(audio));
+  const intervalRef = useRef();
+  const isReady = useRef(false);
+  const { duration } = audioRef.current;
+
+  const time = (t) => {
+    const sec = t ? t : 0;
+    const minutes = Math.floor(sec / 60);
+    const seconds = Math.floor(sec % 60);
+    const formattedTime = `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+    return formattedTime;
   };
+
+  const startTimer = () => {
+    // Clear any timers already running
+    clearInterval(intervalRef.current);
+
+    intervalRef.current = setInterval(() => {
+      if (audioRef.current.ended) {
+        toNextTrack();
+      } else {
+        setTrackProgress(audioRef.current.currentTime);
+      }
+    }, [1000]);
+  };
+
+  const onScrub = (value) => {
+    // Clear any timers already running
+    clearInterval(intervalRef.current);
+    audioRef.current.currentTime = value;
+    setTrackProgress(audioRef.current.currentTime);
+  };
+
+  const onScrubEnd = () => {
+    // If not already playing, start
+    if (!isPlaying) {
+      setIsPlaying(true);
+    }
+    startTimer();
+  };
+
+  const toPrevTrack = () => {
+    if (trackIndex - 1 < 0) {
+      setTrackIndex(chillHop().length - 1);
+    } else {
+      setTrackIndex(trackIndex - 1);
+    }
+  };
+
+  const toNextTrack = () => {
+    if (trackIndex < chillHop().length - 1) {
+      setTrackIndex(trackIndex + 1);
+    } else {
+      setTrackIndex(0);
+    }
+  };
+
+  const handleMusic = (msc) => {
+    const index = chillHop().findIndex((item) => item.name === msc.name);
+    if (index !== -1) {
+      setTrackIndex(index);
+    } else {
+      setTrackIndex(0);
+    }
+  };
+
+  useEffect(() => {
+    if (isPlaying) {
+      audioRef.current.play();
+      startTimer();
+    } else {
+      audioRef.current.pause();
+    }
+  }, [isPlaying]);
+
+  // Handles cleanup and setup when changing tracks
+  useEffect(() => {
+    audioRef.current.pause();
+
+    audioRef.current = new Audio(audio);
+    setTrackProgress(audioRef.current.currentTime);
+
+    if (isReady.current) {
+      audioRef.current.play();
+      setIsPlaying(true);
+      startTimer();
+    } else {
+      // Set the isReady ref as true for the next pass
+      isReady.current = true;
+    }
+  }, [trackIndex]);
+
+  useEffect(() => {
+    // Pause and clean up on unmount
+    return () => {
+      audioRef.current.pause();
+      clearInterval(intervalRef.current);
+    };
+  }, []);
 
   return (
     <div className="flex">
       <ul
         role="list"
-        className="divide-y divide-gray-100 w-1/4 shadow-2xl pl-20 pt-10 pr-4"
+        className="divide-y divide-gray-100 w-1/4 shadow-2xl pl-20 pt-14 pb-20 pr-4"
       >
         <h2 className="ml-2 mb-4 font-bold text-2xl">Library</h2>
         {chillHop().map((el) => (
           <a href="#h" onClick={() => handleMusic(el)}>
             <li
               key={el.id}
-              className={`flex justify-between gap-x-6 py-5 ${
-                el.name === music.name ? "bg-blue-300" : ""
+              className={`flex justify-between gap-x-6 py-5  ${
+                el.name === name ? "bg-blue-300" : ""
               } pl-4`}
             >
               <div className="flex min-w-0 gap-x-4">
@@ -44,18 +146,34 @@ function App() {
       </ul>
 
       <div className="ml-10 flex items-center justify-center w-full ">
-        <div className="flex flex-col items-center justify-center min-h-screen text-white">
-          <img
-            src={music.cover}
-            alt="Album Cover"
-            className="w-64 h-64 rounded-3xl mb-6"
-          />
-          <p className="text-gray-400">{music.arUst}</p>
-          <h1 className="text-lg text-black font-bold">Player</h1>
-          <audio controls className="mt-6">
-            <source src={music.audio} type="audio/mpeg" />
-            Your browser does not support the audio element.
-          </audio>
+        <div className="audio-player">
+          <div className="track-info">
+            <img className="artwork" src={cover} alt={arUst} />
+            <h2 className="artist">{arUst}</h2>
+            <h2 className="title">Player</h2>
+            <div className="flex">
+              <p className="text-black mr-4">{time(trackProgress)}</p>
+              <input
+                type="range"
+                value={trackProgress}
+                step="1"
+                min="0"
+                max={duration ? duration : `${duration}`}
+                className="progress"
+                onChange={(e) => onScrub(e.target.value)}
+                onMouseUp={onScrubEnd}
+                onKeyUp={onScrubEnd}
+              />
+              <p className="text-black ml-4">{time(duration)}</p>
+            </div>
+
+            <AudioControls
+              isPlaying={isPlaying}
+              onPrevClick={toPrevTrack}
+              onNextClick={toNextTrack}
+              onPlayPauseClick={setIsPlaying}
+            />
+          </div>
         </div>
       </div>
     </div>
